@@ -1,7 +1,6 @@
 <?php
 namespace PHPePub\Core;
 
-use com\grandt\BinStringStatic;
 use DOMDocument;
 use DOMXPath;
 use PHPePub\Core\Structure\Ncx;
@@ -1036,7 +1035,8 @@ class EPub {
         if (strlen($bookRoot) <= 1 || $bookRoot == '/') {
             $bookRoot = '';
         } else {
-            if (!BinStringStatic::endsWith($bookRoot, '/')) {
+            // check if the bookRoot ends with a slash, if not, add it.
+            if (substr($bookRoot, -1) != '/') {
                 $bookRoot .= '/';
             }
         }
@@ -1951,7 +1951,7 @@ class EPub {
             $this->finalize();
         }
 
-        if (!BinStringStatic::endsWith($fileName, ".epub")) {
+        if (!substr($fileName, -5) != '.epub') {
             $fileName .= ".epub";
         }
 
@@ -2266,7 +2266,7 @@ class EPub {
             $this->finalize();
         }
 
-        if (!BinStringStatic::endsWith($fileName, ".epub")) {
+        if (!substr($fileName, -5) != '.epub') {
             $fileName .= ".epub";
         }
 
