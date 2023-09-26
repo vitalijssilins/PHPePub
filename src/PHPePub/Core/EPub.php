@@ -1982,7 +1982,7 @@ class EPub {
         }
 
         if (empty($this->identifier) || empty($this->identifierType)) {
-            $this->setIdentifier(StringHelper::createUUID(4), EPub::IDENTIFIER_UUID);
+            $this->setIdentifier(uniqid(), EPub::IDENTIFIER_UUID);
         }
 
         if ($this->date == 0) {

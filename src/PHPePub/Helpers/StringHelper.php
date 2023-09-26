@@ -33,7 +33,7 @@ class StringHelper {
         if (mb_detect_encoding($in_str) == "UTF-8" && mb_check_encoding($in_str, "UTF-8")) {
             return $in_str;
         } else {
-            return utf8_encode($in_str);
+            return mb_convert_encoding($in_str, 'UTF-8');
         }
     }
 
@@ -46,22 +46,6 @@ class StringHelper {
      */
     public static function html2text($string) {
         return preg_replace('~<[^>]*>~', '', $string);
-    }
-
-    /**
-     * Generates an UUID.
-     *
-     * Default version (4) will generate a random UUID, version 3 will URL based UUID.
-     *
-     * Added for convenience
-     *
-     * @param int    $bookVersion UUID version to retrieve, See lib.uuid.manual.html for details.
-     * @param string $url
-     *
-     * @return string The formatted uuid
-     */
-    public static function createUUID($bookVersion = 4, $url = null) {
-        return \UUID::mint($bookVersion, $url, \UUID::nsURL);
     }
 
     /**
