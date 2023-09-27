@@ -16,8 +16,8 @@ use PHPePub\Helpers\ImageHelper;
 use PHPePub\Helpers\MimeHelper;
 use PHPePub\Helpers\StringHelper;
 use PHPePub\Helpers\URLHelper;
-use PHPZip\Zip\File\Zip;
 use RelativePath;
+use ZipArchive;
 
 
 /**
@@ -92,8 +92,8 @@ class EPub {
     public $encodeHTML = false;
 
     private $bookVersion = EPub::BOOK_VERSION_EPUB2;
-    /** @var $Zip Zip */
-    private $zip;
+
+    private ZipArchive $zip;
     private $title = '';
     private $language = 'en';
     private $identifier = '';
@@ -187,11 +187,9 @@ class EPub {
 
         $this->docRoot = filter_input(INPUT_SERVER, 'DOCUMENT_ROOT') . '/';
 
-        $this->zip = new Zip();
-        $this->zip->setExtraField(false);
+        $this->zip = new ZipArchive();
         $this->zip->addFile('application/epub+zip', 'mimetype');
-        $this->zip->setExtraField(true);
-        $this->zip->addDirectory('META-INF');
+        $this->zip->addEmptyDir('META-INF');
 
         $this->ncx = new Ncx(null, null, null, $this->languageCode, $this->writingDirection);
         $this->opf = new Opf();
@@ -628,7 +626,7 @@ class EPub {
         }
         $fileName = FileHelper::normalizeFileName($fileName);
 
-        $this->zip->addFile($fileData, "META-INF/" . $fileName);
+        $this->zip->addFromString("META-INF/" . $fileName, $fileData);
 
         return true;
     }
@@ -654,7 +652,7 @@ class EPub {
 
         $compress = (strpos($mimetype, "image/") !== 0);
 
-        $this->zip->addFile($fileData, $this->bookRoot . $fileName, 0, null, $compress);
+        $this->zip->addFromString($this->bookRoot . $fileName, $fileData, 0);
         $this->fileList[$fileName] = $fileName;
         $this->opf->addItem($fileId, $fileName, $mimetype);
 
@@ -977,7 +975,7 @@ class EPub {
         }
         $fileName = FileHelper::normalizeFileName($fileName);
 
-        if ($this->zip->addLargeFile($filePath, $this->bookRoot . $fileName)) {
+        if ($this->zip->addFile($filePath, $this->bookRoot . $fileName)) {
             $this->fileList[$fileName] = $fileName;
             $this->opf->addItem($fileId, $fileName, $mimetype);
 
@@ -1012,7 +1010,7 @@ class EPub {
 
         $content = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\">\n\t<rootfiles>\n\t\t<rootfile full-path=\"" . $this->bookRoot . "book.opf\" media-type=\"application/oebps-package+xml\" />\n\t</rootfiles>\n</container>\n";
 
-        $this->zip->addFile($content, "META-INF/container.xml", 0, null, false);
+        $this->zip->addFromString("META-INF/container.xml", $content, 0, null, false);
         $this->ncx->setVersion($this->bookVersion);
         $this->opf->setVersion($this->bookVersion);
         $this->opf->addItem("ncx", "book.ncx", Ncx::MIMETYPE);
@@ -1956,18 +1954,11 @@ class EPub {
         }
 
         // Try to open file access
-        $fh = fopen($baseDir . '/' . $fileName, "w");
+        $this->zip->open($baseDir . '/' . $fileName, ZipArchive::CREATE);
+        $this->zip->close();
 
-        if ($fh) {
-            fputs($fh, $this->getBook());
-            fclose($fh);
-
-            // if file is written return TRUE
-            return $fileName;
-        }
-
-        // return FALSE by default
-        return false;
+        // if file is written return TRUE
+        return $fileName;
     }
 
     /**
@@ -2079,15 +2070,15 @@ class EPub {
         $ncxFinal = StringHelper::fixEncoding($this->ncx->finalize());
 
         if (mb_detect_encoding($opfFinal, 'UTF-8', true) === "UTF-8") {
-            $this->zip->addFile($opfFinal, $this->bookRoot . "book.opf");
+            $this->zip->addFromString($this->bookRoot . "book.opf", $opfFinal);
         } else {
-            $this->zip->addFile(mb_convert_encoding($opfFinal, "UTF-8"), $this->bookRoot . "book.opf");
+            $this->zip->addFromString($this->bookRoot . "book.opf", mb_convert_encoding($opfFinal, "UTF-8"));
         }
 
         if (mb_detect_encoding($ncxFinal, 'UTF-8', true) === "UTF-8") {
-            $this->zip->addFile($ncxFinal, $this->bookRoot . "book.ncx");
+            $this->zip->addFromString($this->bookRoot . "book.ncx", $ncxFinal);
         } else {
-            $this->zip->addFile(mb_convert_encoding($ncxFinal, "UTF-8"), $this->bookRoot . "book.ncx");
+            $this->zip->addFromString($this->bookRoot . "book.ncx", mb_convert_encoding($ncxFinal, "UTF-8"));
         }
 
         $this->opf = null;
@@ -2203,7 +2194,7 @@ class EPub {
         $fileName = RelativePath::getRelativePath($fileName);
         $fileName = preg_replace('#^[/\.]+#i', "", $fileName);
 
-        $this->zip->addFile($tocData, $this->bookRoot . $fileName);
+        $this->zip->addFromString($this->bookRoot . $fileName, $tocData);
 
         $this->fileList[$fileName] = $fileName;
         $this->opf->addItem("toc", $fileName, "application/xhtml+xml", "nav");
@@ -2222,59 +2213,6 @@ class EPub {
         $this->ncx->setDocTitle(StringHelper::decodeHtmlEntities($this->title));
 
         return $this->ncx->finalizeEPub3($title, $cssFileName);
-    }
-
-    /**
-     * Return the finalized book.
-     *
-     * @return string with the book in binary form.
-     */
-    function getBook() {
-        if (!$this->isFinalized) {
-            $this->finalize();
-        }
-
-        return $this->zip->getZipData();
-    }
-
-    /**
-     * Return the finalized book size.
-     *
-     * @return string
-     */
-    function getBookSize() {
-        if (!$this->isFinalized) {
-            $this->finalize();
-        }
-
-        return $this->zip->getArchiveSize();
-    }
-
-    /**
-     * Send the book as a zip download
-     *
-     * Sending will fail if the output buffer is in use. You can override this limit by
-     *  calling setIgnoreEmptyBuffer(TRUE), though the function will still fail if that
-     *  buffer is not empty.
-     *
-     * @param string $fileName The name of the book without the .epub at the end.
-     *
-     * @return string|bool The sent file name if successful, FALSE if it failed.
-     */
-    function sendBook($fileName) {
-        if (!$this->isFinalized) {
-            $this->finalize();
-        }
-
-        if (!substr($fileName, -5) != '.epub') {
-            $fileName .= ".epub";
-        }
-
-        if (true === $this->zip->sendZip($fileName, "application/epub+zip", $fileName)) {
-            return $fileName;
-        }
-
-        return false;
     }
 
     /**
@@ -2351,48 +2289,5 @@ class EPub {
         }
 
         return "\t\t<meta name=\"viewport\" content=\"width=" . $this->viewport['width'] . ", height=" . $this->viewport['height'] . "\"/>\n";
-    }
-
-    /**
-     * Set or clear "Dangermode"
-     *
-     * Dangermode allows the user to access the structure of the ePub directly,
-     * potentially leading to defective files.
-     *
-     * @param bool $dangermode
-     */
-    public function setDangermode($dangermode) {
-        $this->dangermode = $dangermode === true;
-    }
-
-    /**
-     * The Opf data isn't generated before the ePub is finalized.
-     *
-     * @return null|Opf the Opf structure class.
-     */
-    public function DANGER_getOpf() {
-        return $this->dangermode ? $this->opf : null;
-    }
-
-    /**
-     * The Ncx data isn't generated before the ePub is finalized.
-     *
-     * @return null|Ncx The Ncx Navigation class
-     */
-    public function DANGER_getNcx() {
-        return $this->dangermode ? $this->ncx : null;
-    }
-
-    /**
-     * The Zip file isn't completed before the ePub is finalized,
-     *  however files added ARE packed and written to it immediately,
-     * and their contents can't be altered.
-     *
-     * See the phpzip/phpzip composer package for usage.
-     *
-     * @return null|Zip The actual zip file.
-     */
-    public function DANGER_getZip() {
-        return $this->dangermode ? $this->zip : null;
     }
 }

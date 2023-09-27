@@ -16,11 +16,11 @@
     ],
     "require": {
         "php": ">=8.2.0",
-        "phpzip/phpzip": "~2.0.7",
         "grandt/phpresizegif": "~1.0.3",
         "grandt/relativepath": "~1.0.1",
         "ext-mbstring": "*",
-        "ext-dom": "*"
+        "ext-dom": "*",
+        "ext-zip": "*"
     },
     "autoload": {
         "psr-4": {
